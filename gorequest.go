@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"log"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httputil"
@@ -23,6 +24,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"golang.org/x/net/proxy"
 	"golang.org/x/net/publicsuffix"
 	"moul.io/http2curl"
 )
@@ -626,11 +628,27 @@ func (s *SuperAgent) Proxy(proxyUrl string) *SuperAgent {
 	if err != nil {
 		s.Errors = append(s.Errors, err)
 	} else if proxyUrl == "" {
-		s.safeModifyTransport()
 		s.Transport.Proxy = nil
 	} else {
-		s.safeModifyTransport()
-		s.Transport.Proxy = http.ProxyURL(parsedProxyUrl)
+		if parsedProxyUrl.Scheme == "http" || parsedProxyUrl.Scheme == "https" {
+			s.Transport.Proxy = http.ProxyURL(parsedProxyUrl)
+		}
+		if parsedProxyUrl.Scheme == "socks5" {
+			if parsedProxyUrl.User != nil {
+				ppass, _ := parsedProxyUrl.User.Password()
+				socks, err := proxy.SOCKS5("tcp", parsedProxyUrl.Host, &proxy.Auth{User: parsedProxyUrl.User.Username(), Password: ppass},
+					&net.Dialer{
+						Timeout: 5 * time.Second,
+					})
+				if err != nil {
+					s.Errors = append(s.Errors, errors.New("Dialer socks5 proxy: "+err.Error()))
+				}
+				s.Transport.Dial = socks.Dial
+			} else {
+				dialer, _ := proxy.FromURL(parsedProxyUrl, proxy.Direct)
+				s.Transport.Dial = dialer.Dial
+			}
+		}
 	}
 	return s
 }
