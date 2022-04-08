@@ -653,6 +653,23 @@ func (s *SuperAgent) Proxy(proxyUrl string) *SuperAgent {
 	return s
 }
 
+//Interface func for set IP
+func (s *SuperAgent) Interface(IP string) *SuperAgent {
+	check := net.ParseIP(IP)
+	if check.To4() == nil {
+		return s
+	}
+
+	localAddr := &net.TCPAddr{
+		IP: net.ParseIP(IP),
+	}
+
+	s.Transport.DialContext = (&net.Dialer{
+		LocalAddr: localAddr,
+	}).DialContext
+	return s
+}
+
 // RedirectPolicy accepts a function to define how to handle redirects. If the
 // policy function returns an error, the next Request is not made and the previous
 // request is returned.
